@@ -1,0 +1,29 @@
+Stack to use: React.js, CSS, and anything that is useful and ise icon library like lucid or something
+
+Purpose: 
+1. The site name will be friends at concerts.
+2. its aim will be to make friends at concerts, from concerts so they can go together in future.
+
+Pages:
+1. Login Logout & Register Page: should have a functional register, login and logout pages and they should be functional recommend any steps need to be taken in another text like setting up a account in a free api site or whatever needed to make it functional 
+2. Home Page: not decided what to put here 
+3. Profile page which shows stats and friends
+4. Concerts page: which shows concert invites posted by people. each invite will have buttons to either accept or reject and the invite will share required number of invites 
+5. Concert reviews page: page which has concert reviews with a exclusive hashtag search which uses #artist_name to fimd relevant results 
+6. also no photo option for reviews but it can have link option to attach instagram link for where people can share insta links where they took photos of themselves or of artists at the show
+7. Chat: once invite accepted a chat exclusive chat space people who accepted to talk and to go to the concert together. (still not decided if this is the right feature but lets see) also use and install all necessary libs for this and let me know what i need to setup anything used should be free of use with lot of usage and i shouldnt pay 
+
+
+
+Design Code: 
+Color Codes 
+1. color codes to be used for buttons (add shadow effects): 
+ a. for acceptance or anything positive : #58CC02
+ b. for rejection or anything negative: #FF9600
+
+2. For background use #ffffff and for any elements like containers #d5d5d5e0 or similar gray
+
+
+
+
+supabase database pwd: EQBxLeKW1NBqimZq

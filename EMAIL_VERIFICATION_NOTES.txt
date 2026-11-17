@@ -1,0 +1,183 @@
+=====================================================================
+ FRIENDS AT CONCERTS - EMAIL VERIFICATION SETUP NOTES
+ Branded signup confirmation emails via Supabase + Resend (custom SMTP)
+=====================================================================
+
+GOAL
+----
+When someone creates an account:
+  - They must verify their email (real verification, no fake emails).
+  - The email must say "friends at concerts" (not Supabase) and use the
+    brand template (green #58CC02 button, charcoal #111827 text).
+
+NOTE: Never write API keys or SMTP passwords in this file or in the code.
+They live only in the Supabase dashboard (and Resend / Brevo dashboards).
+
+
+---------------------------------------------------------------------
+1. FINAL WORKING SETUP
+---------------------------------------------------------------------
+
+A) Supabase > Authentication > SMTP Settings   (Custom SMTP = ON)
+     Sender Email : onboarding@resend.dev
+     Sender Name  : friends at concerts
+     Host         : smtp.resend.com
+     Port         : 587
+     User         : resend
+     Password     : <Resend API key, starts with re_...>
+   The password field shows blank after saving. This is normal; Supabase
+   hides secrets once stored.
+
+B) Supabase > Authentication > Sign In / Providers > Email
+     Confirm email : ON
+
+C) Supabase > Authentication > Emails > "Confirm signup"
+     Subject : custom subject (brand wording)
+     Body    : custom HTML template (brand colours, green button).
+               The button link MUST be:  href="{{ .ConfirmationURL }}"
+               Supabase replaces this with the real activation link.
+   Custom templates are only editable once Custom SMTP is enabled.
+
+D) Supabase > Authentication > URL Configuration
+     Site URL : http://localhost:5175/   (local testing)
+                -> change to the live domain after deployment
+     Redirect URLs: add the same address(es).
+   The local dev port can change (5174, 5175...). Update it if it does.
+
+
+---------------------------------------------------------------------
+2. WHAT THE APP CODE DOES (no code change was needed for emails)
+---------------------------------------------------------------------
+File: src/services/storageService.js  ->  authService.register()
+  - Calls supabase.auth.signUp().
+  - If Supabase returns NO session, verification is required and the
+    result has needsEmailVerification = true.
+  File: src/components/AuthModal.jsx
+  - Shows the "Check Your Inbox!" screen when needsEmailVerification.
+  - If a session IS returned, the user is logged in immediately and the
+    app just says "Registration successful". This means "Confirm email"
+    is OFF in Supabase.
+
+Developer notices were also removed from the UI (SETUP_GUIDE.md mentions
+in the footer, chat page and auth modal) because real users see the site.
+
+
+---------------------------------------------------------------------
+3. WHAT WENT WRONG, IN ORDER (and what each step taught us)
+---------------------------------------------------------------------
+
+STEP 1 - Supabase default emails
+  Problem : Emails came from Supabase with its generic template.
+  Reason  : Default Supabase mailer. Templates are locked until you use
+            your own SMTP provider ("Set up custom SMTP to edit templates").
+  Action  : Created a free Resend account and API key, then entered the
+            key in Supabase SMTP settings.
+
+STEP 2 - Lost API key
+  Problem : Could not copy the Resend key (shown masked).
+  Reason  : Resend shows the full key only ONCE at creation.
+  Action  : Created a new key and copied it before closing the popup.
+
+STEP 3 - HTTP 504 on "Create account"
+  Problem : Registration hung then failed with 504 (gateway timeout).
+  Observed: Same result on port 465 and 587.
+  Likely causes (not all confirmed, as no auth logs were available):
+    - Resend's free sandbox sender (onboarding@resend.dev) only delivers
+      to the email address the Resend account was created with. Signing
+      up with any other address is rejected.
+    - SMTP connection hanging between Supabase and the provider.
+  Action  : Temporarily turned "Confirm email" OFF.
+  Result  : Signup worked instantly BECAUSE no email was being sent.
+            (This is a workaround only: it also means NO verification.)
+
+STEP 4 - Tried Gmail SMTP
+  Problem : 504 again / stuck on "Processing".
+  Notes   : Supabase also warned Gmail is a personal-mail provider,
+            not transactional. Test confirmed the same timeout.
+  Result  : Abandoned.
+
+STEP 5 - Tried Brevo SMTP
+  Problem : "Error sending confirmation email".
+  Notes   : Brevo account verified the sender (a Gmail address) but
+            flagged "Freemail domain is not recommended" and DKIM/DMARC
+            not compliant. Sending as a Gmail address through a third-
+            party relay is commonly rejected by DMARC rules. Brevo also
+            asks for an authenticated domain for reliable delivery.
+  Result  : Abandoned for now (needs a real domain to be reliable).
+
+STEP 6 - Back to Resend (port 587) with a fresh API key
+  Problem : Signup showed "Registration successful" with NO email.
+  Reason  : "Confirm email" was still OFF from step 3, so Supabase
+            logged the user straight in and sent nothing.
+  Action  : Turned "Confirm email" back ON.
+
+STEP 7 - "Check Your Inbox" shown but no email arrived
+  Problem : Verification screen appeared, email never came.
+  Reason  : The test email address already existed as a CONFIRMED
+            user (created during step 3/6 while verification was off).
+            With "Confirm email" ON, Supabase returns a success-looking
+            response for existing addresses (to avoid revealing which
+            emails are registered) and sends nothing.
+  Action  : Deleted the old user in Supabase > Authentication > Users,
+            then registered again.
+  Result  : Email arrived with the custom branded template. WORKING.
+
+
+---------------------------------------------------------------------
+4. KEY LESSONS / TROUBLESHOOTING CHECKLIST
+---------------------------------------------------------------------
+  [ ] Signup says "Registration successful" and logs you in instantly
+      -> "Confirm email" is OFF. Turn it ON.
+  [ ] "Check Your Inbox" shows but no email
+      -> Existing user with that address. Delete the test user in
+         Supabase > Authentication > Users and try again.
+      -> Check resend.com/emails for Delivered / Failed / Bounced.
+      -> Check Spam / Promotions.
+      -> Check Supabase > Authentication > Rate Limits (email per hour).
+  [ ] 504 / timeout on signup
+      -> SMTP not reachable or recipient rejected by provider.
+         Re-check host/port/user/password; try port 2587 on Resend.
+  [ ] "Error sending confirmation email"
+      -> Provider rejected the send (wrong key, unverified sender,
+         freemail sender, or sandbox recipient restriction).
+  [ ] Template button does nothing / wrong place
+      -> Use href="{{ .ConfirmationURL }}" and fix Site URL +
+         Redirect URLs in URL Configuration.
+  [ ] Blank password after saving SMTP settings
+      -> Normal. Not an error.
+
+
+---------------------------------------------------------------------
+5. KNOWN LIMITATION (MUST FIX BEFORE PUBLIC LAUNCH)
+---------------------------------------------------------------------
+Resend's free sandbox sender (onboarding@resend.dev) ONLY delivers to the
+email address that owns the Resend account. Other users will NOT receive
+verification emails and cannot activate their accounts.
+
+To email anyone:
+  1. Buy a domain (for example friendsatconcerts.co.uk).
+  2. Resend > Domains > Add Domain, then add the DNS records (SPF/DKIM)
+     it gives you at the domain registrar and wait for "Verified".
+  3. Supabase > SMTP Settings: set Sender Email to an address on that
+     domain (for example hello@yourdomain.co.uk).
+  4. Set Supabase Site URL / Redirect URLs to the live site address
+     when the app is deployed.
+  5. Test with an email address that is NOT your own.
+
+Other limits to remember:
+  - Resend free tier: about 3,000 emails/month (100/day).
+  - Supabase also rate-limits auth emails per hour.
+
+
+---------------------------------------------------------------------
+6. QUICK REFERENCE: WHERE THINGS ARE
+---------------------------------------------------------------------
+  Supabase SMTP        : Authentication > SMTP Settings
+  Supabase templates   : Authentication > Emails (Notifications section)
+  Confirm email toggle : Authentication > Sign In / Providers > Email
+  Site / redirect URLs : Authentication > URL Configuration
+  Users list           : Authentication > Users
+  Resend send logs     : https://resend.com/emails
+  Resend API keys      : https://resend.com/api-keys
+  Resend domains       : https://resend.com/domains
+  Project env vars     : .env.local (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
