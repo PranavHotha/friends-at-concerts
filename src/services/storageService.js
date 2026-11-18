@@ -450,6 +450,67 @@ export const authService = {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   },
 
+  requestPasswordReset: async (email) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) return { success: false, error: 'Please enter your registered email address.' };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const redirectTo = window.location.origin;
+        const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+          redirectTo: redirectTo
+        });
+        if (error) return { success: false, error: error.message };
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message || 'Failed to send password reset email.' };
+      }
+    }
+
+    // Local fallback
+    const users = getStored(STORAGE_KEYS.USERS, []);
+    const existing = users.find(u => u.email.toLowerCase() === trimmedEmail);
+    if (!existing) {
+      return { success: false, error: 'No account found with this email address.' };
+    }
+    return { success: true };
+  },
+
+  updatePassword: async (newPassword) => {
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters long.' };
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+        if (error) return { success: false, error: error.message };
+        if (data.user) {
+          const userObj = await loadOrCreateProfile(data.user);
+          setStored(STORAGE_KEYS.CURRENT_USER, userObj);
+          return { success: true, user: userObj };
+        }
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message || 'Failed to update password.' };
+      }
+    }
+
+    // Local fallback
+    const currentUser = authService.getCurrentUser();
+    if (currentUser) {
+      const users = getStored(STORAGE_KEYS.USERS, []);
+      const idx = users.findIndex(u => u.id === currentUser.id);
+      if (idx !== -1) {
+        users[idx].password = newPassword;
+        setStored(STORAGE_KEYS.USERS, users);
+      }
+    }
+    return { success: true };
+  },
+
   deleteAccount: async (userId) => {
     if (!userId) {
       const current = authService.getCurrentUser();

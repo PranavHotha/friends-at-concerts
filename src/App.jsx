@@ -17,6 +17,7 @@ import {
   notificationService,
   getStored 
 } from './services/storageService';
+import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Heart, Music, ShieldCheck, Ticket } from 'lucide-react';
 
 export default function App() {
@@ -52,10 +53,31 @@ export default function App() {
       setInvites(inviteService.getInvites());
     };
 
+    // Check if user landed from password reset email link
+    const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
+    if (isRecovery) {
+      setAuthMode('reset_password');
+      setIsAuthOpen(true);
+    }
+
+    let authSubscription = null;
+    if (isSupabaseConfigured && supabase) {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setAuthMode('reset_password');
+          setIsAuthOpen(true);
+        }
+      });
+      authSubscription = data?.subscription;
+    }
+
     window.addEventListener('fic_notification_received', handleNotifEvents);
     window.addEventListener('fic_notification_updated', handleNotifEvents);
     window.addEventListener('fic_chat_updated', handleChatEvents);
     return () => {
+      if (authSubscription) {
+        try { authSubscription.unsubscribe(); } catch (e) {}
+      }
       window.removeEventListener('fic_notification_received', handleNotifEvents);
       window.removeEventListener('fic_notification_updated', handleNotifEvents);
       window.removeEventListener('fic_chat_updated', handleChatEvents);
