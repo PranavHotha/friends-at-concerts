@@ -246,6 +246,25 @@ export const syncChatsFromCloud = async () => {
       .order('created_at', { ascending: true });
 
     if (!msgErr && Array.isArray(cloudMsgs)) {
+      const reactionsByMsg = {};
+      try {
+        const { data: cloudReactions, error: reactErr } = await supabase
+          .from('chat_message_reactions')
+          .select('*');
+        if (!reactErr && Array.isArray(cloudReactions)) {
+          cloudReactions.forEach(r => {
+            if (!r.message_id || !r.emoji || !r.user_id) return;
+            if (!reactionsByMsg[r.message_id]) reactionsByMsg[r.message_id] = {};
+            if (!reactionsByMsg[r.message_id][r.emoji]) reactionsByMsg[r.message_id][r.emoji] = [];
+            if (!reactionsByMsg[r.message_id][r.emoji].includes(r.user_id)) {
+              reactionsByMsg[r.message_id][r.emoji].push(r.user_id);
+            }
+          });
+        }
+      } catch (reactCatchErr) {
+        console.debug('Chat reactions sync note:', reactCatchErr);
+      }
+
       const grouped = {};
       cloudMsgs.forEach(m => {
         if (!m.invite_id) return;
@@ -260,7 +279,8 @@ export const syncChatsFromCloud = async () => {
           senderName: m.profiles?.name || 'London Gig Fan',
           senderAvatar: m.profiles?.avatar || getDefaultAvatar(m.sender_id),
           text: m.text,
-          timestamp: timeStr ? `Today at ${timeStr}` : 'Just now'
+          timestamp: timeStr ? `Today at ${timeStr}` : 'Just now',
+          reactions: reactionsByMsg[m.id] || {}
         });
       });
       setStored(STORAGE_KEYS.CHATS, grouped);
@@ -1836,11 +1856,28 @@ export const chatService = {
     // Save to Supabase Cloud if configured
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('chat_messages').insert([{
-          invite_id: inviteId,
-          sender_id: user.id,
-          text: message.text
-        }]);
+        const { data: insertedMsg, error: msgInsertErr } = await supabase
+          .from('chat_messages')
+          .insert([{
+            invite_id: inviteId,
+            sender_id: user.id,
+            text: message.text
+          }])
+          .select()
+          .single();
+
+        if (!msgInsertErr && insertedMsg && insertedMsg.id) {
+          const oldId = message.id;
+          message.id = insertedMsg.id;
+          const latestChats = getStored(STORAGE_KEYS.CHATS, {});
+          if (Array.isArray(latestChats[inviteId])) {
+            const idx = latestChats[inviteId].findIndex(m => m.id === oldId);
+            if (idx !== -1) {
+              latestChats[inviteId][idx].id = insertedMsg.id;
+              setStored(STORAGE_KEYS.CHATS, latestChats);
+            }
+          }
+        }
       } catch (cloudErr) {
         console.debug('Cloud save note:', cloudErr);
       }
@@ -1851,6 +1888,66 @@ export const chatService = {
     }
 
     return message;
+  },
+
+  toggleReaction: async (inviteId, messageId, emoji) => {
+    const user = authService.getCurrentUser();
+    if (!user || !inviteId || !messageId || !emoji) return { success: false };
+
+    const chats = getStored(STORAGE_KEYS.CHATS, {});
+    const list = chats[inviteId] || [];
+    const msgIdx = list.findIndex(m => m.id === messageId);
+    if (msgIdx === -1) return { success: false };
+
+    const msg = { ...list[msgIdx] };
+    const reactions = { ...(msg.reactions || {}) };
+    const usersForEmoji = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
+    const existingIdx = usersForEmoji.indexOf(user.id);
+    let added = false;
+
+    if (existingIdx === -1) {
+      usersForEmoji.push(user.id);
+      reactions[emoji] = usersForEmoji;
+      added = true;
+    } else {
+      usersForEmoji.splice(existingIdx, 1);
+      if (usersForEmoji.length === 0) {
+        delete reactions[emoji];
+      } else {
+        reactions[emoji] = usersForEmoji;
+      }
+      added = false;
+    }
+
+    msg.reactions = reactions;
+    list[msgIdx] = msg;
+    chats[inviteId] = list;
+    setStored(STORAGE_KEYS.CHATS, chats);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fic_chat_updated', { detail: { inviteId } }));
+    }
+
+    if (isSupabaseConfigured && supabase && !String(messageId).startsWith('msg_')) {
+      try {
+        if (added) {
+          await supabase
+            .from('chat_message_reactions')
+            .insert([{ message_id: messageId, user_id: user.id, emoji }]);
+        } else {
+          await supabase
+            .from('chat_message_reactions')
+            .delete()
+            .eq('message_id', messageId)
+            .eq('user_id', user.id)
+            .eq('emoji', emoji);
+        }
+      } catch (cloudErr) {
+        console.debug('Cloud reaction sync note:', cloudErr);
+      }
+    }
+
+    return { success: true, added, reactions };
   },
 
   clearChat: async (inviteId) => {

@@ -13,10 +13,13 @@ import {
   Lock,
   X,
   AlertCircle,
-  Trash2
+  Trash2,
+  SmilePlus
 } from 'lucide-react';
 import { chatService } from '../services/storageService';
 import { getDefaultAvatar } from '../services/avatarService';
+
+const QUICK_REACTIONS = ['❤️', '🔥', '😂', '🙌', '🎸', '😭'];
 
 const PRESET_WRAPUP_MESSAGES = [
   {
@@ -52,6 +55,7 @@ export default function ChatPage({
   const [isTerminating, setIsTerminating] = useState(false);
   const [isClearChatModalOpen, setIsClearChatModalOpen] = useState(false);
   const [isClearingChat, setIsClearingChat] = useState(false);
+  const [openReactionMsgId, setOpenReactionMsgId] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Filter invites where the user is an author or has accepted AND space is NOT terminated
@@ -150,6 +154,16 @@ export default function ChatPage({
     } finally {
       setIsTerminating(false);
     }
+  };
+
+  const handleToggleReaction = async (messageId, emoji) => {
+    if (!currentUser) {
+      onOpenAuth('login');
+      return;
+    }
+    if (!activeInvite || isTerminated) return;
+    setOpenReactionMsgId(null);
+    await chatService.toggleReaction(activeInvite.id, messageId, emoji);
   };
 
   const handleConfirmClearChat = async () => {
@@ -474,6 +488,9 @@ export default function ChatPage({
                     );
                   }
 
+                  const reactionEntries = Object.entries(m.reactions || {}).filter(([, users]) => Array.isArray(users) && users.length > 0);
+                  const isPickerOpen = openReactionMsgId === m.id;
+
                   return (
                     <div 
                       key={m.id} 
@@ -482,20 +499,22 @@ export default function ChatPage({
                         flexDirection: isMine ? 'row-reverse' : 'row',
                         alignItems: 'flex-start',
                         gap: '8px',
-                        maxWidth: '80%',
-                        alignSelf: isMine ? 'flex-end' : 'flex-start'
+                        maxWidth: '85%',
+                        alignSelf: isMine ? 'flex-end' : 'flex-start',
+                        marginBottom: reactionEntries.length > 0 ? '6px' : '0px',
+                        position: 'relative'
                       }}
                     >
                       <img 
                         src={m.senderAvatar} 
                         alt={m.senderName}
-                        style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                        style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = getDefaultAvatar(m.senderName);
                         }}
                       />
-                      <div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative' }}>
                         <div style={{
                           fontSize: '0.72rem',
                           color: '#8c959f',
@@ -504,9 +523,143 @@ export default function ChatPage({
                         }}>
                           {m.senderName} • {m.timestamp}
                         </div>
-                        <div className={`chat-bubble ${isMine ? 'mine' : 'other'}`}>
-                          {m.text}
+
+                        {/* Floating Instagram-style Emoji Picker */}
+                        {isPickerOpen && !isTerminated && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '100%',
+                              [isMine ? 'right' : 'left']: 0,
+                              marginBottom: '4px',
+                              backgroundColor: '#ffffff',
+                              border: '1.5px solid #d5d5d5',
+                              borderRadius: '999px',
+                              padding: '4px 8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              boxShadow: '0 8px 20px rgba(0,0,0,0.14)',
+                              zIndex: 30
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {QUICK_REACTIONS.map((emoji) => {
+                              const alreadyReacted = Array.isArray(m.reactions?.[emoji]) && m.reactions[emoji].includes(currentUser?.id);
+                              return (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleToggleReaction(m.id, emoji)}
+                                  style={{
+                                    background: alreadyReacted ? '#eefcf0' : 'transparent',
+                                    border: alreadyReacted ? '1px solid #58CC02' : '1px solid transparent',
+                                    borderRadius: '50%',
+                                    width: '30px',
+                                    height: '30px',
+                                    fontSize: '1.05rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    transition: 'transform 0.12s ease'
+                                  }}
+                                  title={`React with ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Bubble + React Trigger Row */}
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: isMine ? 'row-reverse' : 'row',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <div
+                            className={`chat-bubble ${isMine ? 'mine' : 'other'}`}
+                            onDoubleClick={() => handleToggleReaction(m.id, '❤️')}
+                            title={!isTerminated ? 'Double-tap to ❤️ or click emoji to react' : undefined}
+                            style={{ cursor: !isTerminated ? 'pointer' : 'default' }}
+                          >
+                            {m.text}
+                          </div>
+
+                          {!isTerminated && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenReactionMsgId(isPickerOpen ? null : m.id);
+                              }}
+                              style={{
+                                background: isPickerOpen ? '#eefcf0' : '#ffffff',
+                                border: isPickerOpen ? '1px solid #58CC02' : '1px solid #e2e8f0',
+                                borderRadius: '50%',
+                                width: '26px',
+                                height: '26px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: isPickerOpen ? '#58CC02' : '#94a3b8',
+                                flexShrink: 0,
+                                padding: 0
+                              }}
+                              title="React with emoji"
+                              aria-label="React to message"
+                            >
+                              <SmilePlus size={14} />
+                            </button>
+                          )}
                         </div>
+
+                        {/* Instagram-style Overlapping Reaction Pills */}
+                        {reactionEntries.length > 0 && (
+                          <div style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '4px',
+                            marginTop: '-6px',
+                            paddingLeft: isMine ? 0 : '8px',
+                            paddingRight: isMine ? '8px' : 0,
+                            zIndex: 5
+                          }}>
+                            {reactionEntries.map(([emoji, users]) => {
+                              const iReacted = Boolean(currentUser && users.includes(currentUser.id));
+                              return (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleToggleReaction(m.id, emoji)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    padding: '2px 7px',
+                                    borderRadius: '999px',
+                                    backgroundColor: iReacted ? '#eefcf0' : '#ffffff',
+                                    border: iReacted ? '1.5px solid #58CC02' : '1.5px solid #e2e8f0',
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.08)',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    color: '#1f2328',
+                                    cursor: 'pointer'
+                                  }}
+                                  title={`${users.length} reaction${users.length > 1 ? 's' : ''}`}
+                                >
+                                  <span>{emoji}</span>
+                                  {users.length > 1 && <span style={{ fontSize: '0.7rem', color: iReacted ? '#46a302' : '#475569' }}>{users.length}</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

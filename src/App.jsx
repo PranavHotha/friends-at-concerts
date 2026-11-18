@@ -114,6 +114,10 @@ export default function App() {
           await syncChatsFromCloud();
           window.dispatchEvent(new CustomEvent('fic_chat_updated'));
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_message_reactions' }, async () => {
+          await syncChatsFromCloud();
+          window.dispatchEvent(new CustomEvent('fic_chat_updated'));
+        })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_notifications' }, async (payload) => {
           const cur = authService.getCurrentUser();
           if (cur?.id && payload?.new?.recipient_id === cur.id) {
