@@ -108,6 +108,15 @@ export default function NotificationsDropdown({
           defaultVerb: 'sent a message on the chat group',
           actionText: n.actionText || n.message || 'sent a squad chat message'
         };
+      case 'chat_reaction':
+        return {
+          actionIcon: <Heart size={13} strokeWidth={2.4} color="#7c3aed" fill="#7c3aed" />,
+          badgeBg: '#8b5cf6',
+          badgeIcon: <Heart size={10} color="#ffffff" strokeWidth={2.5} />,
+          color: '#7c3aed',
+          defaultVerb: 'reacted to your message in',
+          actionText: n.actionText || n.message || 'reacted to your message'
+        };
       case 'review_like':
         return {
           actionIcon: <Heart size={13} strokeWidth={2.4} color="#dc2626" fill="#dc2626" />,
@@ -144,7 +153,7 @@ export default function NotificationsDropdown({
 
   const handleItemClick = (n) => {
     onMarkAsRead(n.id);
-    if (n.type === 'chat_message') {
+    if (n.type === 'chat_message' || n.type === 'chat_reaction') {
       onNavigate('chat', n.inviteId);
     } else if (n.inviteId) {
       onNavigate('concerts', n.inviteId);

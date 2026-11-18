@@ -325,7 +325,7 @@ export const syncNotificationsFromCloud = async (recipientId) => {
         if (cn.invite_id) {
           const inv = invites.find(i => i.id === cn.invite_id);
           if (inv) {
-            resolvedElement = cn.type === 'chat_message'
+            resolvedElement = (cn.type === 'chat_message' || cn.type === 'chat_reaction')
               ? `${formatInviteTitle(inv)} chat`
               : formatInviteTitle(inv);
           }
@@ -1926,6 +1926,36 @@ export const chatService = {
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('fic_chat_updated', { detail: { inviteId } }));
+    }
+
+    // Notify message author when someone else reacts with an emoji
+    if (added && msg.senderId && msg.senderId !== user.id && msg.senderId !== 'system') {
+      try {
+        const invites = getStored(STORAGE_KEYS.INVITES, []);
+        const invite = invites.find(inv => inv.id === inviteId);
+        const eventName = invite
+          ? (invite.tourName && !invite.tourName.toLowerCase().includes((invite.artist || '').toLowerCase())
+              ? `${invite.artist} — ${invite.tourName}`
+              : (invite.tourName || `${invite.artist} at ${invite.venue}`))
+          : 'Concert Crew';
+        const snippet = msg.text && msg.text.length > 28 ? msg.text.slice(0, 25) + '...' : (msg.text || '');
+
+        notificationService.addNotification({
+          recipientId: msg.senderId,
+          type: 'chat_reaction',
+          title: 'Message Reaction',
+          actionVerb: `reacted ${emoji} to your message in`,
+          elementName: `${eventName} chat`,
+          actionText: `reacted ${emoji} to "${snippet}" in "${eventName} chat"`,
+          message: `${user.name} reacted ${emoji} to your message in "${eventName} chat"`,
+          senderId: user.id,
+          senderName: user.name,
+          senderAvatar: user.avatar,
+          inviteId
+        });
+      } catch (notifErr) {
+        console.debug('Reaction notification note:', notifErr);
+      }
     }
 
     if (isSupabaseConfigured && supabase && !String(messageId).startsWith('msg_')) {
