@@ -21,6 +21,14 @@ export const isLondonCity = (cityStr) => {
   return s.includes('london');
 };
 
+// Always redirect auth confirmation & password reset emails to the live custom domain in production
+const getAppRedirectOrigin = () => {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return window.location.origin;
+  }
+  return 'https://friendsatconcert.co.uk';
+};
+
 // Storage helper functions
 export const getStored = (key, fallback) => {
   try {
@@ -355,6 +363,7 @@ export const authService = {
           email: trimmedEmail,
           password: password,
           options: {
+            emailRedirectTo: `${getAppRedirectOrigin()}/`,
             data: {
               name: name.trim(),
               city: formattedCity,
@@ -456,7 +465,7 @@ export const authService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const redirectTo = `${window.location.origin}/?reset_password=true`;
+        const redirectTo = `${getAppRedirectOrigin()}/?reset_password=true`;
         const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
           redirectTo: redirectTo
         });
