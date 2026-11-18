@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, LogIn, UserPlus, Music, ShieldCheck, Mail, KeyRound, ArrowLeft, Lock } from 'lucide-react';
+import { X, LogIn, UserPlus, ShieldCheck, Mail, KeyRound, ArrowLeft, Lock } from 'lucide-react';
 import { authService, isLondonCity } from '../services/storageService';
+import { BrandIcon } from './BrandLogo';
 
 export default function AuthModal({ isOpen, initialMode = 'login', onClose, onAuthSuccess }) {
   const [mode, setMode] = useState(initialMode); // 'login', 'register', 'forgot', 'reset_password'
@@ -120,15 +121,17 @@ export default function AuthModal({ isOpen, initialMode = 'login', onClose, onAu
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ background: '#1f2328', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-              {mode === 'forgot' ? (
+            {mode === 'forgot' ? (
+              <div style={{ background: '#1f2328', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                 <KeyRound size={18} color="#58CC02" />
-              ) : mode === 'reset_password' ? (
+              </div>
+            ) : mode === 'reset_password' ? (
+              <div style={{ background: '#1f2328', padding: '6px', borderRadius: '8px', display: 'flex' }}>
                 <Lock size={18} color="#58CC02" />
-              ) : (
-                <Music size={18} color="#58CC02" />
-              )}
-            </div>
+              </div>
+            ) : (
+              <BrandIcon size={30} />
+            )}
             <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0 }}>
               {verificationSentEmail 
                 ? 'Verify Your Email' 

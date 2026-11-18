@@ -8,6 +8,7 @@ import ConcertsPage from './pages/ConcertsPage';
 import ReviewsPage from './pages/ReviewsPage';
 import ChatPage from './pages/ChatPage';
 import ProfilePage from './pages/ProfilePage';
+import BrandLogo from './components/BrandLogo';
 import { 
   initializeData, 
   authService, 
@@ -459,25 +460,8 @@ export default function App() {
           flexWrap: 'wrap',
           gap: '1rem'
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ 
-              fontSize: '1.05rem', 
-              fontWeight: 900, 
-              letterSpacing: '-0.4px', 
-              color: '#111827',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}>
-              friends at concert
-              <span style={{ 
-                display: 'inline-block', 
-                width: '6px', 
-                height: '6px', 
-                borderRadius: '50%', 
-                backgroundColor: '#58CC02' 
-              }} />
-            </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <BrandLogo size={26} fontSize="1.05rem" onClick={() => setActiveTab('home')} />
             <div style={{ fontSize: '0.75rem', color: '#59636e' }}>
               Make friends at concerts, from concerts, so you can go together in future.
             </div>

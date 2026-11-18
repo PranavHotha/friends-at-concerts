@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDefaultAvatar } from '../services/avatarService';
 import NotificationsDropdown from './NotificationsDropdown';
+import BrandLogo from './BrandLogo';
 import { 
   Home, 
   Ticket, 
@@ -113,34 +114,12 @@ export default function Navbar({
   return (
     <header className="header-container">
       <div className="header-content">
-        {/* Brand Name Wordmark as Logo */}
-        <div 
-          className="brand-logo" 
+        {/* Brand Logo: Symbol Icon + Wordmark */}
+        <BrandLogo 
+          size={32}
+          fontSize="1.2rem"
           onClick={() => setActiveTab('home')}
-          title="friends at concert — Home"
-          style={{ flexShrink: 0 }}
-        >
-          <span className="brand-logo-text" style={{ 
-            fontSize: '1.2rem', 
-            fontWeight: 900, 
-            letterSpacing: '-0.5px', 
-            color: '#111827',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            whiteSpace: 'nowrap'
-          }}>
-            friends at concert
-            <span style={{ 
-              display: 'inline-block', 
-              width: '7px', 
-              height: '7px', 
-              borderRadius: '50%', 
-              backgroundColor: '#58CC02',
-              flexShrink: 0
-            }} />
-          </span>
-        </div>
+        />
 
         {/* Navigation Tabs with Mobile Slide Controls */}
         <div className="nav-scroll-wrapper">
