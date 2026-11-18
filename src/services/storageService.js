@@ -289,23 +289,61 @@ export const syncNotificationsFromCloud = async (recipientId) => {
       .limit(50);
 
     if (!notifErr && Array.isArray(cloudNotifs)) {
-      const mapped = cloudNotifs.map(cn => ({
-        id: cn.id,
-        recipientId: cn.recipient_id,
-        senderId: cn.sender_id,
-        senderName: cn.sender_name || 'London Concert Buddy',
-        senderAvatar: cn.sender_avatar || getDefaultAvatar(cn.sender_name || 'Buddy'),
-        type: cn.type,
-        title: cn.title,
-        actionVerb: '',
-        elementName: '',
-        actionText: cn.message,
-        message: cn.message,
-        inviteId: cn.invite_id,
-        reviewId: cn.review_id,
-        read: Boolean(cn.read),
-        createdAt: cn.created_at
-      }));
+      const invites = getStored(STORAGE_KEYS.INVITES, []);
+      const reviews = getStored(STORAGE_KEYS.REVIEWS, []);
+
+      const formatInviteTitle = (inv) => {
+        if (!inv) return '';
+        if (inv.tourName && !inv.tourName.toLowerCase().includes((inv.artist || '').toLowerCase())) {
+          return `${inv.artist} — ${inv.tourName}`;
+        }
+        return inv.tourName || `${inv.artist} at ${inv.venue}`;
+      };
+
+      const mapped = cloudNotifs.map(cn => {
+        let resolvedElement = '';
+        if (cn.invite_id) {
+          const inv = invites.find(i => i.id === cn.invite_id);
+          if (inv) {
+            resolvedElement = cn.type === 'chat_message'
+              ? `${formatInviteTitle(inv)} chat`
+              : formatInviteTitle(inv);
+          }
+        }
+        if (!resolvedElement && cn.review_id) {
+          const rev = reviews.find(r => r.id === cn.review_id);
+          if (rev) {
+            resolvedElement = `${rev.artist} at ${rev.venue}`;
+          }
+        }
+        if (!resolvedElement && cn.message) {
+          const match = cn.message.match(/"([^"]+)"/);
+          if (match && match[1]) {
+            resolvedElement = match[1];
+          } else if (cn.type === 'chat_message') {
+            const chatMatch = cn.message.match(/on the (.+?) check it/i);
+            if (chatMatch && chatMatch[1]) resolvedElement = chatMatch[1];
+          }
+        }
+
+        return {
+          id: cn.id,
+          recipientId: cn.recipient_id,
+          senderId: cn.sender_id,
+          senderName: cn.sender_name || 'London Concert Buddy',
+          senderAvatar: cn.sender_avatar || getDefaultAvatar(cn.sender_name || 'Buddy'),
+          type: cn.type,
+          title: cn.title,
+          actionVerb: '',
+          elementName: resolvedElement,
+          actionText: cn.message,
+          message: cn.message,
+          inviteId: cn.invite_id,
+          reviewId: cn.review_id,
+          read: Boolean(cn.read),
+          createdAt: cn.created_at
+        };
+      });
       const others = getStored(STORAGE_KEYS.NOTIFICATIONS, []).filter(n => n.recipientId !== targetId);
       setStored(STORAGE_KEYS.NOTIFICATIONS, [...mapped, ...others]);
       return mapped;
@@ -1254,7 +1292,9 @@ export const inviteService = {
       }
 
       // Notify invite author if someone else accepted
-      const inviteTitle = invite.tourName || `${invite.artist} at ${invite.venue}`;
+      const inviteTitle = invite.tourName && !invite.tourName.toLowerCase().includes((invite.artist || '').toLowerCase())
+        ? `${invite.artist} — ${invite.tourName}`
+        : (invite.tourName || `${invite.artist} at ${invite.venue}`);
       if (invite.author && invite.author.id !== user.id) {
         notificationService.addNotification({
           recipientId: invite.author.id,
@@ -1293,7 +1333,9 @@ export const inviteService = {
       invite.userResponses[user.id] = 'rejected';
 
       // Notify invite author if someone passed
-      const inviteTitle = invite.tourName || `${invite.artist} at ${invite.venue}`;
+      const inviteTitle = invite.tourName && !invite.tourName.toLowerCase().includes((invite.artist || '').toLowerCase())
+        ? `${invite.artist} — ${invite.tourName}`
+        : (invite.tourName || `${invite.artist} at ${invite.venue}`);
       if (invite.author && invite.author.id !== user.id) {
         notificationService.addNotification({
           recipientId: invite.author.id,
