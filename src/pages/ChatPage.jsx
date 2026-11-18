@@ -57,6 +57,9 @@ export default function ChatPage({
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [openReactionMsgId, setOpenReactionMsgId] = useState(null);
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const prevMsgCountRef = useRef(0);
+  const prevInviteIdRef = useRef(null);
 
   // Filter invites where the user is an author or has accepted AND space is NOT terminated
   // Once an event space is terminated, all users including the host shouldn't see it in concertchat section
@@ -94,8 +97,31 @@ export default function ChatPage({
   }, [activeInvite, selectedInviteId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const container = chatContainerRef.current;
+    const currentInviteId = activeInvite?.id || null;
+    const switchedRoom = currentInviteId !== prevInviteIdRef.current;
+    const hasNewMessages = messages.length > prevMsgCountRef.current;
+
+    if (switchedRoom) {
+      prevInviteIdRef.current = currentInviteId;
+      prevMsgCountRef.current = messages.length;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+      return;
+    }
+
+    if (hasNewMessages && container) {
+      const lastMsg = messages[messages.length - 1];
+      const isMine = lastMsg && currentUser && lastMsg.senderId === currentUser.id;
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (isMine || distanceFromBottom < 140) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    prevMsgCountRef.current = messages.length;
+  }, [messages, activeInvite?.id, currentUser]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -429,7 +455,7 @@ export default function ChatPage({
               </div>
 
               {/* Messages Container */}
-              <div className="chat-messages">
+              <div className="chat-messages" ref={chatContainerRef} onClick={() => setOpenReactionMsgId(null)}>
                 <div className="chat-bubble system">
                   🔒 This is an exclusive space for confirmed attendees of <strong>{activeInvite.artist}</strong>. Coordinate pre-show meetup spots, ticket handoffs, and logistics here!
                 </div>
