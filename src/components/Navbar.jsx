@@ -117,7 +117,7 @@ export default function Navbar({
         <div 
           className="brand-logo" 
           onClick={() => setActiveTab('home')}
-          title="friends at concerts — Home"
+          title="friends at concert — Home"
           style={{ flexShrink: 0 }}
         >
           <span className="brand-logo-text" style={{ 
@@ -130,7 +130,7 @@ export default function Navbar({
             gap: '4px',
             whiteSpace: 'nowrap'
           }}>
-            friends at concerts
+            friends at concert
             <span style={{ 
               display: 'inline-block', 
               width: '7px', 

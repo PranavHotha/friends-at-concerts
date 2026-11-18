@@ -70,7 +70,7 @@ export default function HomePage({
           marginBottom: '1.25rem'
         }}>
           <Sparkles size={16} color="#58CC02" />
-          <span>🇬🇧 Exclusively for London Music Fans & Gigs</span>
+          <span>Exclusively for London Music Fans & Gigs</span>
         </div>
 
         <h1 style={{
@@ -160,7 +160,7 @@ export default function HomePage({
       <section style={{ marginBottom: '3rem' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#111827' }}>
-            How Friends at Concerts Works
+            How Friends at Concert Works
           </h2>
           <p style={{ color: '#59636e', fontSize: '0.95rem', marginTop: '0.4rem' }}>
             Three simple steps from solo ticket holder to squad at the barricade.

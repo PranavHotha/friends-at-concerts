@@ -61,7 +61,7 @@ export default function AuthModal({ isOpen, initialMode = 'login', onClose, onAu
             setVerificationSentEmail(email);
             return;
           }
-          onAuthSuccess(res.user, 'Registration successful! Welcome to London Friends at Concerts!');
+          onAuthSuccess(res.user, 'Registration successful! Welcome to London Friends at Concert!');
           onClose();
         } else {
           setError(res.error || 'Registration failed');
@@ -84,7 +84,7 @@ export default function AuthModal({ isOpen, initialMode = 'login', onClose, onAu
               <Music size={18} color="#58CC02" />
             </div>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0 }}>
-              {verificationSentEmail ? 'Verify Your Email' : mode === 'login' ? 'Welcome Back!' : 'Join Friends at Concerts'}
+              {verificationSentEmail ? 'Verify Your Email' : mode === 'login' ? 'Welcome Back!' : 'Join Friends at Concert'}
             </h2>
           </div>
           <button 

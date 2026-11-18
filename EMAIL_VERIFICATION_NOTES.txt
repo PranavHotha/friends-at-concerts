@@ -15,11 +15,11 @@ They live only in the Supabase dashboard (and Resend / Brevo dashboards).
 
 
 ---------------------------------------------------------------------
-1. FINAL WORKING SETUP
+1. FINAL PRODUCTION SETUP (WORKING & LIVE)
 ---------------------------------------------------------------------
 
 A) Supabase > Authentication > SMTP Settings   (Custom SMTP = ON)
-     Sender Email : onboarding@resend.dev
+     Sender Email : noreply@friendsatconcert.co.uk
      Sender Name  : friends at concerts
      Host         : smtp.resend.com
      Port         : 587
@@ -27,6 +27,7 @@ A) Supabase > Authentication > SMTP Settings   (Custom SMTP = ON)
      Password     : <Resend API key, starts with re_...>
    The password field shows blank after saving. This is normal; Supabase
    hides secrets once stored.
+   Domain friendsatconcert.co.uk is authenticated on Resend with DKIM, SPF, and DMARC.
 
 B) Supabase > Authentication > Sign In / Providers > Email
      Confirm email : ON
@@ -39,10 +40,14 @@ C) Supabase > Authentication > Emails > "Confirm signup"
    Custom templates are only editable once Custom SMTP is enabled.
 
 D) Supabase > Authentication > URL Configuration
-     Site URL : http://localhost:5175/   (local testing)
-                -> change to the live domain after deployment
-     Redirect URLs: add the same address(es).
-   The local dev port can change (5174, 5175...). Update it if it does.
+     Site URL     : https://friendsatconcert.co.uk/
+     Redirect URLs: https://friendsatconcert.co.uk/**
+                    https://www.friendsatconcert.co.uk/**
+
+E) Production Hosting & DNS:
+     Domain Registrar : Namecheap (friendsatconcert.co.uk)
+     Web Hosting      : Render Static Site (friends-at-concerts.onrender.com)
+     Custom Domain    : https://friendsatconcert.co.uk (SSL Certificate Issued)
 
 
 ---------------------------------------------------------------------

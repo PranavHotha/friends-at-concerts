@@ -421,7 +421,7 @@ export default function App() {
               alignItems: 'center',
               gap: '4px'
             }}>
-              friends at concerts
+              friends at concert
               <span style={{ 
                 display: 'inline-block', 
                 width: '6px', 
