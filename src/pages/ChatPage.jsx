@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   Lock,
   X,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { chatService } from '../services/storageService';
 import { getDefaultAvatar } from '../services/avatarService';
@@ -49,6 +50,8 @@ export default function ChatPage({
   const [selectedPresetId, setSelectedPresetId] = useState('concluded');
   const [presetMessageText, setPresetMessageText] = useState(PRESET_WRAPUP_MESSAGES[0].text);
   const [isTerminating, setIsTerminating] = useState(false);
+  const [isClearChatModalOpen, setIsClearChatModalOpen] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Filter invites where the user is an author or has accepted AND space is NOT terminated
@@ -146,6 +149,22 @@ export default function ChatPage({
       console.error('Failed to terminate space:', err);
     } finally {
       setIsTerminating(false);
+    }
+  };
+
+  const handleConfirmClearChat = async () => {
+    if (!activeInvite || !isHost) return;
+    setIsClearingChat(true);
+    try {
+      const res = await chatService.clearChat(activeInvite.id);
+      if (res.success) {
+        setMessages([]);
+        setIsClearChatModalOpen(false);
+      }
+    } catch (err) {
+      console.error('Failed to clear chat:', err);
+    } finally {
+      setIsClearingChat(false);
     }
   };
 
@@ -312,33 +331,58 @@ export default function ChatPage({
                   </div>
                 </div>
 
-                {/* Right Header: Terminate Space option for Host & Squad Avatars */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {/* Right Header: Clear Chat & Terminate Space options for Host & Squad Avatars */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   {isHost && !isTerminated && (
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setSelectedPresetId(PRESET_WRAPUP_MESSAGES[0].id);
-                        setPresetMessageText(PRESET_WRAPUP_MESSAGES[0].text);
-                        setIsTerminateModalOpen(true);
-                      }}
-                      className="btn-secondary"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '0.4rem 0.75rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: isEventPassed ? '#b91c1c' : '#475569',
-                        borderColor: isEventPassed ? '#fca5a5' : '#d5d5d5',
-                        backgroundColor: isEventPassed ? '#fef2f2' : '#ffffff'
-                      }}
-                      title={isEventPassed ? 'Event has passed - notify attendees and close space' : 'Terminate concert chat space'}
-                    >
-                      <Lock size={13} color={isEventPassed ? '#b91c1c' : '#475569'} />
-                      <span>Terminate Space {isEventPassed ? '(Event Passed)' : ''}</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsClearChatModalOpen(true)}
+                        className="btn-secondary"
+                        disabled={messages.length === 0}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '0.4rem 0.7rem',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: '#475569',
+                          borderColor: '#d5d5d5',
+                          backgroundColor: '#ffffff',
+                          opacity: messages.length === 0 ? 0.5 : 1
+                        }}
+                        title="Clear all messages in this chat room"
+                      >
+                        <Trash2 size={13} color="#475569" />
+                        <span>Clear Chat</span>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setSelectedPresetId(PRESET_WRAPUP_MESSAGES[0].id);
+                          setPresetMessageText(PRESET_WRAPUP_MESSAGES[0].text);
+                          setIsTerminateModalOpen(true);
+                        }}
+                        className="btn-secondary"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '0.4rem 0.75rem',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: isEventPassed ? '#b91c1c' : '#475569',
+                          borderColor: isEventPassed ? '#fca5a5' : '#d5d5d5',
+                          backgroundColor: isEventPassed ? '#fef2f2' : '#ffffff'
+                        }}
+                        title={isEventPassed ? 'Event has passed - notify attendees and close space' : 'Terminate concert chat space'}
+                      >
+                        <Lock size={13} color={isEventPassed ? '#b91c1c' : '#475569'} />
+                        <span>Terminate Space {isEventPassed ? '(Event Passed)' : ''}</span>
+                      </button>
+                    </>
                   )}
 
                   {/* Squad Avatars */}
@@ -697,6 +741,74 @@ export default function ChatPage({
               >
                 <Lock size={15} />
                 <span>{isTerminating ? 'Terminating Space...' : 'Send Preset Info & Terminate Space'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Chat Confirmation Modal (Host Only) */}
+      {isClearChatModalOpen && activeInvite && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(17, 24, 39, 0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+          onClick={() => !isClearingChat && setIsClearChatModalOpen(false)}
+        >
+          <div
+            className="fic-container"
+            style={{
+              maxWidth: '420px',
+              width: '100%',
+              padding: '1.5rem',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', color: '#111827' }}>
+                <Trash2 size={18} color="#b91c1c" />
+                <span>Clear Squad Chat?</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isClearingChat && setIsClearChatModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontSize: '0.88rem', color: '#475569', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+              This will permanently clear all messages in the <strong>{activeInvite.artist}</strong> chat space for you and all attendees.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setIsClearChatModalOpen(false)}
+                disabled={isClearingChat}
+                style={{ padding: '0.55rem 1rem', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-negative"
+                onClick={handleConfirmClearChat}
+                disabled={isClearingChat}
+                style={{ padding: '0.55rem 1.15rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={15} />
+                <span>{isClearingChat ? 'Clearing...' : 'Clear Chat'}</span>
               </button>
             </div>
           </div>

@@ -1811,6 +1811,35 @@ export const chatService = {
     return message;
   },
 
+  clearChat: async (inviteId) => {
+    const user = authService.getCurrentUser();
+    if (!user) return { success: false, error: 'Must be logged in to clear chat.' };
+
+    const invites = getStored(STORAGE_KEYS.INVITES, []);
+    const invite = invites.find(inv => inv.id === inviteId);
+    if (!invite || !invite.author || invite.author.id !== user.id) {
+      return { success: false, error: 'Only the concert invite host can clear this chat.' };
+    }
+
+    const chats = getStored(STORAGE_KEYS.CHATS, {});
+    chats[inviteId] = [];
+    setStored(STORAGE_KEYS.CHATS, chats);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('chat_messages').delete().eq('invite_id', inviteId);
+      } catch (cloudErr) {
+        console.debug('Cloud clear chat note:', cloudErr);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fic_chat_updated', { detail: { inviteId } }));
+    }
+
+    return { success: true };
+  },
+
   isChatTerminated: (inviteId) => {
     const terminated = getStored('fic_real_terminated_chats', {});
     if (terminated[inviteId]) return true;
