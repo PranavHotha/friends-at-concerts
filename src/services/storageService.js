@@ -195,6 +195,84 @@ export const syncInvitesFromCloud = async () => {
   }
 };
 
+// Fetch live concert reviews from Supabase
+export const syncReviewsFromCloud = async () => {
+  if (!isSupabaseConfigured || !supabase) {
+    return getStored(STORAGE_KEYS.REVIEWS, []);
+  }
+  try {
+    const { data: cloudReviews, error: revErr } = await supabase
+      .from('concert_reviews')
+      .select('*, profiles:author_id(*)')
+      .order('created_at', { ascending: false });
+
+    if (!revErr && Array.isArray(cloudReviews)) {
+      const mappedRev = cloudReviews.map(cr => ({
+        id: cr.id,
+        artist: cr.artist,
+        venue: cr.venue,
+        concertDate: cr.concert_date,
+        rating: cr.rating,
+        reviewText: cr.review_text,
+        instagramUrl: cr.instagram_url,
+        hashtags: cr.hashtags || [],
+        likes: cr.likes || 0,
+        createdAt: cr.created_at.split('T')[0],
+        author: {
+          id: cr.author_id,
+          name: cr.profiles?.name || 'London Gig Fan',
+          avatar: cr.profiles?.avatar || getDefaultAvatar(cr.author_id)
+        }
+      }));
+      setStored(STORAGE_KEYS.REVIEWS, mappedRev);
+      return mappedRev;
+    }
+    return getStored(STORAGE_KEYS.REVIEWS, []);
+  } catch (err) {
+    console.debug('Cloud reviews sync note:', err);
+    return getStored(STORAGE_KEYS.REVIEWS, []);
+  }
+};
+
+// Fetch live concert chat messages from Supabase
+export const syncChatsFromCloud = async () => {
+  if (!isSupabaseConfigured || !supabase) {
+    return getStored(STORAGE_KEYS.CHATS, {});
+  }
+  try {
+    const { data: cloudMsgs, error: msgErr } = await supabase
+      .from('chat_messages')
+      .select('*, profiles:sender_id(*)')
+      .order('created_at', { ascending: true });
+
+    if (!msgErr && Array.isArray(cloudMsgs)) {
+      const grouped = {};
+      cloudMsgs.forEach(m => {
+        if (!m.invite_id) return;
+        if (!grouped[m.invite_id]) grouped[m.invite_id] = [];
+        const d = new Date(m.created_at);
+        const timeStr = isNaN(d.getTime())
+          ? ''
+          : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        grouped[m.invite_id].push({
+          id: m.id,
+          senderId: m.sender_id,
+          senderName: m.profiles?.name || 'London Gig Fan',
+          senderAvatar: m.profiles?.avatar || getDefaultAvatar(m.sender_id),
+          text: m.text,
+          timestamp: timeStr ? `Today at ${timeStr}` : 'Just now'
+        });
+      });
+      setStored(STORAGE_KEYS.CHATS, grouped);
+      return grouped;
+    }
+    return getStored(STORAGE_KEYS.CHATS, {});
+  } catch (err) {
+    console.debug('Cloud chats sync note:', err);
+    return getStored(STORAGE_KEYS.CHATS, {});
+  }
+};
+
 export const initializeData = async () => {
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
     setStored(STORAGE_KEYS.USERS, []);
@@ -320,31 +398,10 @@ export const initializeData = async () => {
       await syncInvitesFromCloud();
 
       // 3. Fetch live reviews from Supabase
-      const { data: cloudReviews, error: revErr } = await supabase
-        .from('concert_reviews')
-        .select('*, profiles:author_id(*)')
-        .order('created_at', { ascending: false });
+      await syncReviewsFromCloud();
 
-      if (!revErr && cloudReviews && cloudReviews.length > 0) {
-        const mappedRev = cloudReviews.map(cr => ({
-          id: cr.id,
-          artist: cr.artist,
-          venue: cr.venue,
-          concertDate: cr.concert_date,
-          rating: cr.rating,
-          reviewText: cr.review_text,
-          instagramUrl: cr.instagram_url,
-          hashtags: cr.hashtags || [],
-          likes: cr.likes || 0,
-          createdAt: cr.created_at.split('T')[0],
-          author: {
-            id: cr.author_id,
-            name: cr.profiles?.name || 'London Gig Fan',
-            avatar: cr.profiles?.avatar || getDefaultAvatar(cr.author_id)
-          }
-        }));
-        setStored(STORAGE_KEYS.REVIEWS, mappedRev);
-      }
+      // 4. Fetch live chat messages from Supabase
+      await syncChatsFromCloud();
     } catch (err) {
       console.debug('Cloud sync in progress or waiting for tables', err);
     }
@@ -1347,17 +1404,27 @@ export const reviewService = {
     // Save to Supabase Cloud if configured
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('concert_reviews').insert([{
-          author_id: user.id,
-          artist: newReview.artist,
-          venue: newReview.venue,
-          concert_date: newReview.concertDate,
-          rating: newReview.rating,
-          review_text: newReview.reviewText,
-          instagram_url: newReview.instagramUrl,
-          hashtags: newReview.hashtags,
-          likes: 0
-        }]);
+        const { data: insertedRev, error: revInsertErr } = await supabase
+          .from('concert_reviews')
+          .insert([{
+            author_id: user.id,
+            artist: newReview.artist,
+            venue: newReview.venue,
+            concert_date: newReview.concertDate,
+            rating: newReview.rating,
+            review_text: newReview.reviewText,
+            instagram_url: newReview.instagramUrl,
+            hashtags: newReview.hashtags,
+            likes: 0
+          }])
+          .select()
+          .single();
+
+        if (!revInsertErr && insertedRev && insertedRev.id) {
+          newReview.id = insertedRev.id;
+          reviews[0] = newReview;
+          setStored(STORAGE_KEYS.REVIEWS, reviews);
+        }
       } catch (cloudErr) {
         console.debug('Cloud save note:', cloudErr);
       }

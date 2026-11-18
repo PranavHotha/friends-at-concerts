@@ -12,6 +12,8 @@ import BrandLogo from './components/BrandLogo';
 import { 
   initializeData, 
   syncInvitesFromCloud,
+  syncReviewsFromCloud,
+  syncChatsFromCloud,
   authService, 
   inviteService, 
   reviewService,
@@ -94,7 +96,7 @@ export default function App() {
       authSubscription = data?.subscription;
 
       invitesChannel = supabase
-        .channel('public:invites_sync')
+        .channel('public:universal_sync')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'invite_attendees' }, async () => {
           const updated = await syncInvitesFromCloud();
           setInvites(updated);
@@ -103,12 +105,26 @@ export default function App() {
           const updated = await syncInvitesFromCloud();
           setInvites(updated);
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'concert_reviews' }, async () => {
+          const updatedReviews = await syncReviewsFromCloud();
+          setReviews(updatedReviews);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, async () => {
+          await syncChatsFromCloud();
+          window.dispatchEvent(new CustomEvent('fic_chat_updated'));
+        })
         .subscribe();
     }
 
     const handleFocusSync = async () => {
-      const updated = await syncInvitesFromCloud();
-      setInvites(updated);
+      const [updatedInvites, updatedReviews] = await Promise.all([
+        syncInvitesFromCloud(),
+        syncReviewsFromCloud(),
+        syncChatsFromCloud()
+      ]);
+      setInvites(updatedInvites);
+      setReviews(updatedReviews);
+      window.dispatchEvent(new CustomEvent('fic_chat_updated'));
     };
 
     window.addEventListener('focus', handleFocusSync);
