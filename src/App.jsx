@@ -20,14 +20,34 @@ import {
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Heart, Music, ShieldCheck, Ticket } from 'lucide-react';
 
+// Persistent detection of password recovery link
+const detectRecovery = () => {
+  try {
+    const hash = typeof window !== 'undefined' ? (window.location.hash || '') : '';
+    const search = typeof window !== 'undefined' ? (window.location.search || '') : '';
+    if (
+      hash.includes('type=recovery') || 
+      search.includes('type=recovery') || 
+      search.includes('reset_password') || 
+      hash.includes('reset_password')
+    ) {
+      sessionStorage.setItem('fic_pending_password_reset', 'true');
+      return true;
+    }
+    return sessionStorage.getItem('fic_pending_password_reset') === 'true';
+  } catch (e) {
+    return false;
+  }
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
   const [invites, setInvites] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [selectedChatInviteId, setSelectedChatInviteId] = useState(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login');
+  const [isAuthOpen, setIsAuthOpen] = useState(() => detectRecovery());
+  const [authMode, setAuthMode] = useState(() => detectRecovery() ? 'reset_password' : 'login');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [userNotifications, setUserNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
@@ -102,7 +122,13 @@ export default function App() {
     setIsAuthOpen(true);
   };
 
+  const handleCloseAuth = () => {
+    try { sessionStorage.removeItem('fic_pending_password_reset'); } catch (e) {}
+    setIsAuthOpen(false);
+  };
+
   const handleAuthSuccess = (user, msg) => {
+    try { sessionStorage.removeItem('fic_pending_password_reset'); } catch (e) {}
     setCurrentUser(user);
     setInvites(inviteService.getInvites());
     if (user) {
@@ -488,7 +514,7 @@ export default function App() {
       <AuthModal 
         isOpen={isAuthOpen}
         initialMode={authMode}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={handleCloseAuth}
         onAuthSuccess={handleAuthSuccess}
       />
 

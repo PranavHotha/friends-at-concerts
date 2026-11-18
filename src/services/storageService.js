@@ -456,7 +456,7 @@ export const authService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const redirectTo = window.location.origin;
+        const redirectTo = `${window.location.origin}/?reset_password=true`;
         const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
           redirectTo: redirectTo
         });
@@ -487,6 +487,7 @@ export const authService = {
           password: newPassword
         });
         if (error) return { success: false, error: error.message };
+        try { sessionStorage.removeItem('fic_pending_password_reset'); } catch (e) {}
         if (data.user) {
           const userObj = await loadOrCreateProfile(data.user);
           setStored(STORAGE_KEYS.CURRENT_USER, userObj);
