@@ -461,7 +461,7 @@ export default function App() {
           gap: '1rem'
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <BrandLogo size={26} fontSize="1.05rem" onClick={() => setActiveTab('home')} />
+            <BrandLogo size={34} onClick={() => setActiveTab('home')} />
             <div style={{ fontSize: '0.75rem', color: '#59636e' }}>
               Make friends at concerts, from concerts, so you can go together in future.
             </div>

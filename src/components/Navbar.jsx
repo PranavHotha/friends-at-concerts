@@ -116,8 +116,7 @@ export default function Navbar({
       <div className="header-content">
         {/* Brand Logo: Symbol Icon + Wordmark */}
         <BrandLogo 
-          size={32}
-          fontSize="1.2rem"
+          size={38}
           onClick={() => setActiveTab('home')}
         />
 
