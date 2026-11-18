@@ -14,6 +14,7 @@ import {
   syncInvitesFromCloud,
   syncReviewsFromCloud,
   syncChatsFromCloud,
+  syncNotificationsFromCloud,
   authService, 
   inviteService, 
   reviewService,
@@ -113,32 +114,50 @@ export default function App() {
           await syncChatsFromCloud();
           window.dispatchEvent(new CustomEvent('fic_chat_updated'));
         })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_notifications' }, async (payload) => {
+          const cur = authService.getCurrentUser();
+          if (cur?.id && payload?.new?.recipient_id === cur.id) {
+            const updatedNotifs = await syncNotificationsFromCloud(cur.id);
+            setUserNotifications(updatedNotifs);
+            if (payload.new.message) {
+              addNotification(payload.new.message, payload.new.type === 'invite_accept' ? 'accept' : 'info');
+            }
+          }
+        })
         .subscribe();
     }
 
-    const handleFocusSync = async () => {
+    const runUniversalSync = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const cur = authService.getCurrentUser();
       const [updatedInvites, updatedReviews] = await Promise.all([
         syncInvitesFromCloud(),
         syncReviewsFromCloud(),
-        syncChatsFromCloud()
+        syncChatsFromCloud(),
+        cur?.id ? syncNotificationsFromCloud(cur.id) : Promise.resolve([])
       ]);
       setInvites(updatedInvites);
       setReviews(updatedReviews);
+      if (cur?.id) {
+        setUserNotifications(notificationService.getNotifications(cur.id));
+      }
       window.dispatchEvent(new CustomEvent('fic_chat_updated'));
     };
 
-    window.addEventListener('focus', handleFocusSync);
+    const pollTimer = setInterval(runUniversalSync, 3000);
+    window.addEventListener('focus', runUniversalSync);
     window.addEventListener('fic_notification_received', handleNotifEvents);
     window.addEventListener('fic_notification_updated', handleNotifEvents);
     window.addEventListener('fic_chat_updated', handleChatEvents);
     return () => {
+      clearInterval(pollTimer);
       if (authSubscription) {
         try { authSubscription.unsubscribe(); } catch (e) {}
       }
       if (invitesChannel) {
         try { supabase.removeChannel(invitesChannel); } catch (e) {}
       }
-      window.removeEventListener('focus', handleFocusSync);
+      window.removeEventListener('focus', runUniversalSync);
       window.removeEventListener('fic_notification_received', handleNotifEvents);
       window.removeEventListener('fic_notification_updated', handleNotifEvents);
       window.removeEventListener('fic_chat_updated', handleChatEvents);

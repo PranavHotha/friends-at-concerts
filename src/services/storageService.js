@@ -273,6 +273,50 @@ export const syncChatsFromCloud = async () => {
   }
 };
 
+// Fetch live user notifications from Supabase
+export const syncNotificationsFromCloud = async (recipientId) => {
+  if (!isSupabaseConfigured || !supabase) {
+    return notificationService.getNotifications(recipientId);
+  }
+  const targetId = recipientId || authService.getCurrentUser()?.id;
+  if (!targetId) return [];
+  try {
+    const { data: cloudNotifs, error: notifErr } = await supabase
+      .from('user_notifications')
+      .select('*')
+      .eq('recipient_id', targetId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!notifErr && Array.isArray(cloudNotifs)) {
+      const mapped = cloudNotifs.map(cn => ({
+        id: cn.id,
+        recipientId: cn.recipient_id,
+        senderId: cn.sender_id,
+        senderName: cn.sender_name || 'London Concert Buddy',
+        senderAvatar: cn.sender_avatar || getDefaultAvatar(cn.sender_name || 'Buddy'),
+        type: cn.type,
+        title: cn.title,
+        actionVerb: '',
+        elementName: '',
+        actionText: cn.message,
+        message: cn.message,
+        inviteId: cn.invite_id,
+        reviewId: cn.review_id,
+        read: Boolean(cn.read),
+        createdAt: cn.created_at
+      }));
+      const others = getStored(STORAGE_KEYS.NOTIFICATIONS, []).filter(n => n.recipientId !== targetId);
+      setStored(STORAGE_KEYS.NOTIFICATIONS, [...mapped, ...others]);
+      return mapped;
+    }
+    return notificationService.getNotifications(targetId);
+  } catch (err) {
+    console.debug('Cloud notifications sync note:', err);
+    return notificationService.getNotifications(targetId);
+  }
+};
+
 export const initializeData = async () => {
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
     setStored(STORAGE_KEYS.USERS, []);
@@ -402,6 +446,12 @@ export const initializeData = async () => {
 
       // 4. Fetch live chat messages from Supabase
       await syncChatsFromCloud();
+
+      // 5. Fetch live notifications for current user
+      const curUser = authService.getCurrentUser();
+      if (curUser?.id) {
+        await syncNotificationsFromCloud(curUser.id);
+      }
     } catch (err) {
       console.debug('Cloud sync in progress or waiting for tables', err);
     }
@@ -926,6 +976,11 @@ export const notificationService = {
     if (idx !== -1) {
       all[idx].read = true;
       setStored(STORAGE_KEYS.NOTIFICATIONS, all);
+      if (isSupabaseConfigured && supabase && !String(notificationId).startsWith('notif_')) {
+        try {
+          supabase.from('user_notifications').update({ read: true }).eq('id', notificationId).then(() => {}).catch(() => {});
+        } catch (e) {}
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('fic_notification_updated'));
       }
@@ -948,6 +1003,11 @@ export const notificationService = {
         changed = true;
       }
     });
+    if (isSupabaseConfigured && supabase) {
+      try {
+        supabase.from('user_notifications').update({ read: true }).eq('recipient_id', targetId).eq('read', false).then(() => {}).catch(() => {});
+      } catch (e) {}
+    }
     if (changed) {
       setStored(STORAGE_KEYS.NOTIFICATIONS, all);
       if (typeof window !== 'undefined') {
@@ -967,6 +1027,11 @@ export const notificationService = {
     let all = getStored(STORAGE_KEYS.NOTIFICATIONS, []);
     all = all.filter(n => n.recipientId !== targetId);
     setStored(STORAGE_KEYS.NOTIFICATIONS, all);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        supabase.from('user_notifications').delete().eq('recipient_id', targetId).then(() => {}).catch(() => {});
+      } catch (e) {}
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('fic_notification_updated'));
     }
