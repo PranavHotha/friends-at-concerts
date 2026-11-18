@@ -187,12 +187,19 @@ export default function App() {
     setIsAuthOpen(false);
   };
 
-  const handleAuthSuccess = (user, msg) => {
+  const handleAuthSuccess = async (user, msg) => {
     try { sessionStorage.removeItem('fic_pending_password_reset'); } catch (e) {}
     setCurrentUser(user);
     setInvites(inviteService.getInvites());
     if (user) {
       setUserNotifications(notificationService.getNotifications(user.id));
+      const [updatedInvites, updatedNotifs] = await Promise.all([
+        syncInvitesFromCloud(),
+        syncNotificationsFromCloud(user.id),
+        syncChatsFromCloud()
+      ]);
+      setInvites(updatedInvites);
+      setUserNotifications(updatedNotifs);
     }
     addNotification(msg, 'success');
   };
