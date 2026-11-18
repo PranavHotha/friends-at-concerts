@@ -110,6 +110,91 @@ const loadOrCreateProfile = async (authUser) => {
   };
 };
 
+// Fetch live concert invites and attendee responses from Supabase
+export const syncInvitesFromCloud = async () => {
+  if (!isSupabaseConfigured || !supabase) {
+    return getStored(STORAGE_KEYS.INVITES, []);
+  }
+  try {
+    const { data: cloudInvites, error: invErr } = await supabase
+      .from('concert_invites')
+      .select('*, profiles:author_id(*)')
+      .order('created_at', { ascending: false });
+
+    if (invErr || !cloudInvites) {
+      return getStored(STORAGE_KEYS.INVITES, []);
+    }
+
+    // Fetch attendees universally (gracefully handle if table isn't created yet)
+    const attendeesByInvite = {};
+    const responsesByInvite = {};
+    let hasAttendeesTable = false;
+    try {
+      const { data: cloudAttendees, error: attErr } = await supabase
+        .from('invite_attendees')
+        .select('*, profiles:user_id(*)');
+
+      if (!attErr && Array.isArray(cloudAttendees)) {
+        hasAttendeesTable = true;
+        cloudAttendees.forEach(att => {
+          if (!responsesByInvite[att.invite_id]) responsesByInvite[att.invite_id] = {};
+          responsesByInvite[att.invite_id][att.user_id] = att.status;
+
+          if (att.status === 'accepted') {
+            if (!attendeesByInvite[att.invite_id]) attendeesByInvite[att.invite_id] = [];
+            attendeesByInvite[att.invite_id].push({
+              id: att.user_id,
+              name: att.profiles?.name || 'London Music Fan',
+              avatar: att.profiles?.avatar || getDefaultAvatar(att.user_id)
+            });
+          }
+        });
+      }
+    } catch (attCatchErr) {
+      console.debug('Invite attendees sync note:', attCatchErr);
+    }
+
+    const mapped = cloudInvites.map(ci => {
+      const acceptedUsers = (attendeesByInvite[ci.id] || []).filter(u => u.id !== ci.author_id);
+      const userResponses = responsesByInvite[ci.id] || {};
+      const acceptedCount = hasAttendeesTable
+        ? acceptedUsers.length
+        : (ci.accepted_count || 0);
+
+      return {
+        id: ci.id,
+        artist: ci.artist,
+        tourName: ci.tour_name,
+        venue: ci.venue,
+        city: ci.city,
+        date: ci.date,
+        time: ci.time,
+        genre: ci.genre,
+        imageUrl: ci.image_url,
+        requiredSpots: ci.required_spots,
+        acceptedCount,
+        ticketStatus: ci.ticket_status,
+        description: ci.description,
+        createdAt: ci.created_at,
+        acceptedUsers,
+        userResponses,
+        author: {
+          id: ci.author_id,
+          name: ci.profiles?.name || 'London Music Fan',
+          avatar: ci.profiles?.avatar || getDefaultAvatar(ci.author_id),
+          city: ci.profiles?.city || 'London, UK'
+        }
+      };
+    });
+
+    setStored(STORAGE_KEYS.INVITES, mapped);
+    return mapped;
+  } catch (err) {
+    console.debug('Cloud invites sync note:', err);
+    return getStored(STORAGE_KEYS.INVITES, []);
+  }
+};
+
 export const initializeData = async () => {
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
     setStored(STORAGE_KEYS.USERS, []);
@@ -231,39 +316,8 @@ export const initializeData = async () => {
         setStored(STORAGE_KEYS.CURRENT_USER, userObj);
       }
 
-      // 2. Fetch live concert invites from Supabase
-      const { data: cloudInvites, error: invErr } = await supabase
-        .from('concert_invites')
-        .select('*, profiles:author_id(*)')
-        .order('created_at', { ascending: false });
-
-      if (!invErr && cloudInvites && cloudInvites.length > 0) {
-        const mapped = cloudInvites.map(ci => ({
-          id: ci.id,
-          artist: ci.artist,
-          tourName: ci.tour_name,
-          venue: ci.venue,
-          city: ci.city,
-          date: ci.date,
-          time: ci.time,
-          genre: ci.genre,
-          imageUrl: ci.image_url,
-          requiredSpots: ci.required_spots,
-          acceptedCount: ci.accepted_count || 0,
-          ticketStatus: ci.ticket_status,
-          description: ci.description,
-          createdAt: ci.created_at,
-          acceptedUsers: [],
-          userResponses: {},
-          author: {
-            id: ci.author_id,
-            name: ci.profiles?.name || 'London Music Fan',
-            avatar: ci.profiles?.avatar || getDefaultAvatar(ci.author_id),
-            city: ci.profiles?.city || 'London, UK'
-          }
-        }));
-        setStored(STORAGE_KEYS.INVITES, mapped);
-      }
+      // 2. Fetch live concert invites + attendees from Supabase
+      await syncInvitesFromCloud();
 
       // 3. Fetch live reviews from Supabase
       const { data: cloudReviews, error: revErr } = await supabase
@@ -949,21 +1003,31 @@ export const inviteService = {
     // Save to Supabase Cloud if configured
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('concert_invites').insert([{
-          author_id: user.id,
-          artist: newInvite.artist,
-          tour_name: newInvite.tourName,
-          venue: newInvite.venue,
-          city: newInvite.city,
-          date: newInvite.date,
-          time: newInvite.time,
-          genre: newInvite.genre,
-          image_url: newInvite.imageUrl,
-          required_spots: newInvite.requiredSpots,
-          accepted_count: 0,
-          ticket_status: newInvite.ticketStatus,
-          description: newInvite.description
-        }]);
+        const { data: inserted, error: insertErr } = await supabase
+          .from('concert_invites')
+          .insert([{
+            author_id: user.id,
+            artist: newInvite.artist,
+            tour_name: newInvite.tourName,
+            venue: newInvite.venue,
+            city: newInvite.city,
+            date: newInvite.date,
+            time: newInvite.time,
+            genre: newInvite.genre,
+            image_url: newInvite.imageUrl,
+            required_spots: newInvite.requiredSpots,
+            accepted_count: 0,
+            ticket_status: newInvite.ticketStatus,
+            description: newInvite.description
+          }])
+          .select()
+          .single();
+
+        if (!insertErr && inserted && inserted.id) {
+          newInvite.id = inserted.id;
+          invites[0] = newInvite;
+          setStored(STORAGE_KEYS.INVITES, invites);
+        }
       } catch (cloudErr) {
         console.debug('Cloud save note:', cloudErr);
       }
@@ -996,7 +1060,7 @@ export const inviteService = {
     return newInvite;
   },
 
-  respondToInvite: (inviteId, responseType) => {
+  respondToInvite: async (inviteId, responseType) => {
     const user = authService.getCurrentUser();
     if (!user) return { success: false, error: 'Must be logged in to respond to invites.' };
 
@@ -1142,6 +1206,34 @@ export const inviteService = {
 
     invites[inviteIndex] = invite;
     setStored(STORAGE_KEYS.INVITES, invites);
+
+    // Persist response universally to Supabase so post owner and all users see it
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const statusValue = responseType === 'accept' ? 'accepted' : 'rejected';
+        await supabase
+          .from('invite_attendees')
+          .upsert(
+            {
+              invite_id: inviteId,
+              user_id: user.id,
+              status: statusValue
+            },
+            { onConflict: 'invite_id,user_id' }
+          );
+
+        if (responseType === 'accept') {
+          await supabase.from('chat_messages').insert([{
+            invite_id: inviteId,
+            sender_id: user.id,
+            text: `🎉 Joined the ${invite.artist} concert crew!`
+          }]);
+        }
+      } catch (cloudErr) {
+        console.debug('Cloud invite response sync note:', cloudErr);
+      }
+    }
+
     return { success: true, responseType, invite };
   },
 

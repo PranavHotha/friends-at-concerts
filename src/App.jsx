@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage';
 import BrandLogo from './components/BrandLogo';
 import { 
   initializeData, 
+  syncInvitesFromCloud,
   authService, 
   inviteService, 
   reviewService,
@@ -82,6 +83,7 @@ export default function App() {
     }
 
     let authSubscription = null;
+    let invitesChannel = null;
     if (isSupabaseConfigured && supabase) {
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
@@ -90,8 +92,26 @@ export default function App() {
         }
       });
       authSubscription = data?.subscription;
+
+      invitesChannel = supabase
+        .channel('public:invites_sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'invite_attendees' }, async () => {
+          const updated = await syncInvitesFromCloud();
+          setInvites(updated);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'concert_invites' }, async () => {
+          const updated = await syncInvitesFromCloud();
+          setInvites(updated);
+        })
+        .subscribe();
     }
 
+    const handleFocusSync = async () => {
+      const updated = await syncInvitesFromCloud();
+      setInvites(updated);
+    };
+
+    window.addEventListener('focus', handleFocusSync);
     window.addEventListener('fic_notification_received', handleNotifEvents);
     window.addEventListener('fic_notification_updated', handleNotifEvents);
     window.addEventListener('fic_chat_updated', handleChatEvents);
@@ -99,6 +119,10 @@ export default function App() {
       if (authSubscription) {
         try { authSubscription.unsubscribe(); } catch (e) {}
       }
+      if (invitesChannel) {
+        try { supabase.removeChannel(invitesChannel); } catch (e) {}
+      }
+      window.removeEventListener('focus', handleFocusSync);
       window.removeEventListener('fic_notification_received', handleNotifEvents);
       window.removeEventListener('fic_notification_updated', handleNotifEvents);
       window.removeEventListener('fic_chat_updated', handleChatEvents);
@@ -204,7 +228,7 @@ export default function App() {
     }
   };
 
-  const handleAcceptInvite = (inviteId) => {
+  const handleAcceptInvite = async (inviteId) => {
     if (!currentUser) {
       handleOpenAuth('login');
       return;
@@ -214,7 +238,7 @@ export default function App() {
       addNotification('You are the host of this concert invite and already lead the crew!', 'warning');
       return;
     }
-    const res = inviteService.respondToInvite(inviteId, 'accept');
+    const res = await inviteService.respondToInvite(inviteId, 'accept');
     if (res.success) {
       setInvites(inviteService.getInvites());
       setCurrentUser(authService.getCurrentUser());
@@ -225,7 +249,7 @@ export default function App() {
     }
   };
 
-  const handleRejectInvite = (inviteId) => {
+  const handleRejectInvite = async (inviteId) => {
     if (!currentUser) {
       handleOpenAuth('login');
       return;
@@ -235,7 +259,7 @@ export default function App() {
       addNotification('You are the host of this concert invite and cannot pass on it.', 'warning');
       return;
     }
-    const res = inviteService.respondToInvite(inviteId, 'reject');
+    const res = await inviteService.respondToInvite(inviteId, 'reject');
     if (res.success) {
       setInvites(inviteService.getInvites());
       setCurrentUser(authService.getCurrentUser());
